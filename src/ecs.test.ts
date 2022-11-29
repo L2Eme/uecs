@@ -66,8 +66,7 @@ describe("behavior", function () {
     it("inserts entity with components", function () {
         const world = new World;
 
-        const entity = 10;
-        world.insert(10, new A);
+        const entity = world.insert(10, new A);
         expect(world.exists(entity));
         expect(world.size()).toEqual(1);
         expect(world.has(entity, A)).toBeTruthy();
@@ -76,8 +75,7 @@ describe("behavior", function () {
     it("inserts entity with tags", function () {
         const world = new World;
 
-        const entity = 10;
-        world.insert(10, Tag.for("Test"));
+        const entity = world.insert(10, Tag.for("Test"));
         expect(world.exists(entity));
         expect(world.size()).toEqual(1);
         expect(world.has(entity, Tag.for("Test"))).toBeTruthy();
@@ -86,8 +84,7 @@ describe("behavior", function () {
     it("inserts entity with components", function () {
         const world = new World;
 
-        const entity = 10;
-        world.insert(10, new A);
+        const entity = world.insert(10, new A);
         expect(world.exists(entity));
         expect(world.size()).toEqual(1);
         expect(world.has(entity, A)).toBeTruthy();
@@ -192,18 +189,36 @@ describe("behavior", function () {
         expect(() => world.view(A).each(() => { })).not.toThrow();
     });
 
-    it("insert does not break sequence", function () {
+    it("insert may use empty slot", function () {
         const world = new World;
 
-        world.insert(100);
-        expect(world.create()).toEqual(101);
-        world.insert(99);
-        expect(world.create()).toEqual(102);
-        world.insert(200);
-        expect(world.create()).toEqual(201);
+        let id = world.insert(100);
+        expect(id).toEqual(0)
+        expect(world.create()).toEqual(1);
+
+        let id0 = world.insert(99);
+        expect(id0).toEqual(2)
+        expect(world.create()).toEqual(3);
+
+        expect(world.exists(0)).toBe(true);
+        expect(world.exists(1)).toBe(true);
+        expect(world.exists(2)).toBe(true);
+
+        world.destroy(0);
+        world.destroy(1);
+        world.destroy(2)
+
+        expect(world.exists(0)).toBe(false);
+        expect(world.exists(1)).toBe(false);
+        expect(world.exists(2)).toBe(false);
+
+        expect(world.insert(1)).toBe(1);
+        expect(world.create()).toBe(0);
+        expect(world.create()).toBe(2);
+
     });
 
-    it("insert does not break sequence when entity == world.entitySequence", function () {
+    it("insert does not break sequence", function () {
         const world = new World;
 
         const a = world.insert(0);

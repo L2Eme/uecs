@@ -20,39 +20,67 @@ export interface Component {
     [x: number]: any;
 }
 
+/**
+ * Fast Array <--> Slow Array
+ */
+type ComponentStorage<T> = T[]
 // Type aliases for component storage
-interface TypeStorage<T> { [type: string]: T }
-interface ComponentStorage<T> { [entity: number]: T }
+interface TypeStorage<T> { [type: string]: ComponentStorage<T> }
 
 // store entities in Array<Entity> instead of Set<Entity>
 // if an entity is destroyed, set it in the array to undefined
 // skip entities marked as undefined in views
-class IdSet extends Set<Entity> {
+class IdSlot {
 
-    list: (number | undefined)[] = []
+    slots: (number | undefined)[] = []
+    deletedIds: number[] = []
 
     isDirty: boolean = true;
-    cachedList: number[] = []
+    cachedIds: number[] = []
 
-    add(value: number): this {
-        this.isDirty = true;
-        super.add(value);
-        this.list[value] = value;
-        return this;
+    get size() {
+        return this.slots.length - this.deletedIds.length
     }
 
-    delete(value: number): boolean {
+    has(id: number): boolean {
+        return id < this.slots.length &&
+            this.slots[id] !== undefined
+    }
+
+    add(preferedId: Entity = 0): Entity {
         this.isDirty = true;
-        this.list[value] = undefined;
-        return super.delete(value);
+        let id: Entity;
+        if (this.deletedIds.length === 0) {
+            id = this.slots.length;
+            this.slots.push(id)
+        } else {
+            if (this.has(preferedId)) {
+                id = this.deletedIds.pop()!;
+            } else {
+                id = preferedId
+            }
+            this.slots[id] = id;
+        }
+        return id;
+    }
+
+    delete(id: number): boolean {
+        if (this.has(id)) {
+            this.isDirty = true;
+            this.slots[id] = undefined;
+            this.deletedIds.push(id)
+            return true
+        } else {
+            return false
+        }
     }
 
     getCachedList(): number[] {
         if (this.isDirty) {
             this.isDirty = false;
-            this.cachedList = this.list.filter(v => v !== undefined) as any;
+            this.cachedIds = this.slots.filter(s => s !== undefined) as any
         }
-        return this.cachedList;
+        return this.cachedIds;
     }
 }
 
@@ -63,17 +91,15 @@ class IdSet extends Set<Entity> {
  * Visit https://jprochazk.github.io/uecs/ for a comprehensive tutorial.
  */
 export class World {
-    private entitySequence: Entity = 0;
-    private entities: IdSet = new IdSet;
-    private components: TypeStorage<ComponentStorage<Component>> = {};
+    private entities: IdSlot = new IdSlot;
+    private components: TypeStorage<Component> = {};
     private views: { [id: string]: View<any> } = {};
 
     /**
      * Creates an entity, and optionally assigns all `components` to it.
      */
     create<T extends Component[]>(...components: T): Entity {
-        const entity = this.entitySequence++;
-        this.entities.add(entity);
+        const entity = this.entities.add();
 
         // emplace all components into entity
         for (let i = 0, len = components.length; i < len; ++i) {
@@ -108,9 +134,9 @@ export class World {
      * ```
      */
     insert<T extends Component[]>(entity: Entity, ...components: T): Entity {
-        // ensure this doesn't break our entity sequence
-        if (entity >= this.entitySequence) this.entitySequence = entity + 1;
-        this.entities.add(entity);
+        if (!this.entities.has(entity)) {
+            entity = this.entities.add(entity)
+        }
         for (let i = 0, len = components.length; i < len; ++i) {
             this.emplace(entity, components[i]);
         }
@@ -238,7 +264,7 @@ export class World {
 
         let storage = this.components[type];
         if (storage == null) {
-            storage = this.components[type] = {};
+            storage = this.components[type] = [];
         }
         storage[entity] = component;
     }
@@ -315,10 +341,12 @@ export class World {
             // ensure that never-before seen types are registered.
             for (let i = 0; i < types.length; ++i) {
                 if (this.components[types[i].name] === undefined) {
-                    this.components[types[i].name] = {};
+                    this.components[types[i].name] = [];
                 }
             }
-            this.views[id] = new ViewImpl(this, types);
+
+            let storages = types.map(t => this.components[t.name])
+            this.views[id] = new ViewImpl(this, storages);
         }
         return this.views[id];
     }
@@ -337,6 +365,13 @@ export class World {
      */
     all(): Entity[] {
         return this.entities.getCachedList()
+    }
+
+    /**
+     * get storage
+     */
+    getStorage<T extends Component>(component: Constructor<T>): ComponentStorage<Component> {
+        return this.components[component.name]
     }
 }
 
@@ -381,8 +416,7 @@ export interface View<T extends Constructor<Component>[]> {
 type ComponentView<T extends Constructor<Component>[]> = (callback: ViewCallback<T>) => void;
 class ViewImpl<T extends Constructor<Component>[]> {
     private view: ComponentView<T>;
-    constructor(world: World, types: T) {
-        let storages = types.map(t => (world as any).components[t.name])
+    constructor(world: World, storages: ComponentStorage<Component>[]) {
         this.view = function (callback) {
             let entities = (world as any).entities.getCachedList();
             for (let e of entities) {
