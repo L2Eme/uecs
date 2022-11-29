@@ -1,5 +1,4 @@
-
-import { InstanceTypeTuple, Constructor, join } from "./util";
+import { InstanceTypeTuple, Constructor } from "./util";
 
 /**
  * An opaque identifier used to access component arrays
@@ -25,9 +24,37 @@ export interface Component {
 interface TypeStorage<T> { [type: string]: T }
 interface ComponentStorage<T> { [entity: number]: T }
 
-// TODO: store entities in Array<Entity> instead of Set<Entity>
-// if an entity is destroyed, set it in the array to -1
-// skip entities marked as -1 in views
+// store entities in Array<Entity> instead of Set<Entity>
+// if an entity is destroyed, set it in the array to undefined
+// skip entities marked as undefined in views
+class IdSet extends Set<Entity> {
+
+    list: (number | undefined)[] = []
+
+    isDirty: boolean = true;
+    cachedList: number[] = []
+
+    add(value: number): this {
+        this.isDirty = true;
+        super.add(value);
+        this.list[value] = value;
+        return this;
+    }
+
+    delete(value: number): boolean {
+        this.isDirty = true;
+        this.list[value] = undefined;
+        return super.delete(value);
+    }
+
+    getCachedList(): number[] {
+        if (this.isDirty) {
+            this.isDirty = false;
+            this.cachedList = this.list.filter(v => v !== undefined) as any;
+        }
+        return this.cachedList;
+    }
+}
 
 /**
  * World is the core of the ECS. 
@@ -37,7 +64,7 @@ interface ComponentStorage<T> { [entity: number]: T }
  */
 export class World {
     private entitySequence: Entity = 0;
-    private entities: Set<Entity> = new Set;
+    private entities: IdSet = new IdSet;
     private components: TypeStorage<ComponentStorage<Component>> = {};
     private views: { [id: string]: View<any> } = {};
 
@@ -300,7 +327,7 @@ export class World {
      * Removes every entity, and destroys all components.
      */
     clear() {
-        for (const entity of this.entities.values()) {
+        for (const entity of this.entities.getCachedList()) {
             this.destroy(entity);
         }
     }
@@ -308,8 +335,8 @@ export class World {
     /**
      * Returns an iterator over all the entities in the world.
      */
-    all(): IterableIterator<Entity> {
-        return this.entities.values();
+    all(): Entity[] {
+        return this.entities.getCachedList()
     }
 }
 
@@ -357,7 +384,7 @@ class ViewImpl<T extends Constructor<Component>[]> {
     constructor(world: World, types: T) {
         let storages = types.map(t => (world as any).components[t.name])
         this.view = function (callback) {
-            let entities = (world as any).entities.values();
+            let entities = (world as any).entities.getCachedList();
             for (let e of entities) {
                 let matchType = true;
                 let params = [e];

@@ -212,16 +212,29 @@ describe("behavior", function () {
         expect(a + 1).toEqual(b);
     });
 
-    it("view doesn't loop infinitely", function () {
+    it("view loop infinitely", function () {
         const world = new World;
         world.create(A);
-        // creates six new entities
+        let count = 0;
+        // creates 1 new entities
         world.view(A).each((e) => {
             // base case
             if (e > 5) return false;
+            count ++;
             world.create(A);
         });
-        expect(world.size()).toEqual(7);
+        expect(count).toEqual(1);
+        expect(world.size()).toEqual(2);
+
+        // creates 2 new entities
+        world.view(A).each((e) => {
+            // base case
+            if (e > 5) return false;
+            count ++;
+            world.create(A);
+        });
+        expect(count).toEqual(3);
+        expect(world.size()).toEqual(4);
     });
 });
 
