@@ -209,9 +209,11 @@ export class World {
             throw new Error(`Cannot set component "${type}" for dead entity ID ${entity}`);
         }
 
-        const storage = this.components[type];
-        if (storage == null) this.components[type] = {};
-        this.components[type][entity] = component;
+        let storage = this.components[type];
+        if (storage == null) {
+            storage = this.components[type] = {};
+        }
+        storage[entity] = component;
     }
 
     /**
@@ -353,53 +355,32 @@ type ComponentView<T extends Constructor<Component>[]> = (callback: ViewCallback
 class ViewImpl<T extends Constructor<Component>[]> {
     private view: ComponentView<T>;
     constructor(world: World, types: T) {
-        this.view = generateView(world, types);
+        let storages = types.map(t => (world as any).components[t.name])
+        this.view = function (callback) {
+            let entities = (world as any).entities.values();
+            for (let e of entities) {
+                let matchType = true;
+                let params = [e];
+                for (let s of storages) {
+                    let c = s[e];
+                    if (c === undefined) {
+                        matchType = false;
+                        break;
+                    } else {
+                        params.push(c)
+                    }
+                }
+
+                if (matchType) {
+                    // 执行
+                    if (callback.apply(null, params as any) == false) return;
+                } else {
+                    continue;
+                }
+            }
+        }
     }
     each(callback: ViewCallback<T>) {
         this.view(callback);
     }
-}
-
-const keywords = {
-    world: "_$WORLD",
-    entity: "_$ENTITY",
-    callback: "_$CALLBACK",
-    storage: "_$STORAGE",
-};
-function generateView(world: World, types: any[]): ComponentView<any> {
-    const length = types.length;
-    let storages = "";
-    const storageNames = [];
-    for (let i = 0; i < length; ++i) {
-        const typeName = types[i].name;
-        const name = `${keywords.storage}${typeName}`;
-        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n`;
-        storageNames.push(name);
-    }
-    let variables = "";
-    const variableNames = [];
-    for (let i = 0; i < length; ++i) {
-        const typeName = types[i].name;
-        const name = `${typeName}${i}`;
-        variables += `const ${name} = ${storageNames[i]}[${keywords.entity}];\n`;
-        variableNames.push(name);
-    }
-    let condition = "if (";
-    for (let i = 0; i < length; ++i) {
-        condition += `${variableNames[i]} === undefined`;
-        if (i !== length - 1) condition += ` || `;
-    }
-    condition += ") continue;\n";
-
-    const fn = ""
-        + storages
-        + `return function(${keywords.callback}) {\n`
-        + `for (const ${keywords.entity} of ${keywords.world}.entities.values()) {\n`
-        + variables
-        + condition
-        + `if (${keywords.callback}(${keywords.entity},${join(variableNames, ",")}) === false) return;\n`
-        + "}\n"
-        + "}";
-
-    return (new Function(keywords.world, fn))(world) as any;
 }
