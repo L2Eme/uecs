@@ -23,7 +23,7 @@ export interface Component {
 /**
  * Fast Array <--> Slow Array
  */
-type ComponentStorage<T> = T[]
+export type ComponentStorage<T> = T[]
 // Type aliases for component storage
 interface TypeStorage<T> { [type: string]: ComponentStorage<T> }
 
@@ -43,8 +43,7 @@ class IdSlot {
     }
 
     has(id: number): boolean {
-        return id < this.slots.length &&
-            this.slots[id] !== undefined
+        return this.slots[id] !== undefined
     }
 
     add(preferedId: Entity = 0): Entity {
@@ -365,13 +364,13 @@ export class World {
     /**
      * get storage
      */
-    getStorage<T extends Component>(klass: Constructor<T>): ComponentStorage<Component> {
+    getStorage<T extends Component>(klass: Constructor<T>): ComponentStorage<T> {
         let name = klass.name;
         // ensure that never-before seen types are registered.
         if (this.components[name] === undefined) {
             this.components[name] = [];
         }
-        return this.components[name]
+        return this.components[name] as any
     }
 }
 
