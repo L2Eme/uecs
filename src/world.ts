@@ -89,6 +89,8 @@ class IdSlot {
  * It stores all entities and their components, and enables efficiently querying them.
  * 
  * Visit https://jprochazk.github.io/uecs/ for a comprehensive tutorial.
+ * 
+ * TODO: add archetype
  */
 export class World {
     private entities: IdSlot = new IdSlot;
@@ -338,14 +340,7 @@ export class World {
             id += types[i].name;
         }
         if (!(id in this.views)) {
-            // ensure that never-before seen types are registered.
-            for (let i = 0; i < types.length; ++i) {
-                if (this.components[types[i].name] === undefined) {
-                    this.components[types[i].name] = [];
-                }
-            }
-
-            let storages = types.map(t => this.components[t.name])
+            let storages = types.map(t => this.getStorage(t))
             this.views[id] = new ViewImpl(this, storages);
         }
         return this.views[id];
@@ -370,8 +365,13 @@ export class World {
     /**
      * get storage
      */
-    getStorage<T extends Component>(component: Constructor<T>): ComponentStorage<Component> {
-        return this.components[component.name]
+    getStorage<T extends Component>(klass: Constructor<T>): ComponentStorage<Component> {
+        let name = klass.name;
+        // ensure that never-before seen types are registered.
+        if (this.components[name] === undefined) {
+            this.components[name] = [];
+        }
+        return this.components[name]
     }
 }
 
@@ -433,7 +433,7 @@ class ViewImpl<T extends Constructor<Component>[]> {
                 }
 
                 if (matchType) {
-                    // 执行
+                    // this apply is expensive
                     if (callback.apply(null, params as any) == false) return;
                 } else {
                     continue;
