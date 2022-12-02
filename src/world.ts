@@ -95,6 +95,7 @@ export class World {
     private entities: IdSlot = new IdSlot;
     private components: TypeStorage<Component> = {};
     private views: { [id: string]: View<any> } = {};
+    private resources: { [id: string]: Component } = {};
 
     /**
      * Creates an entity, and optionally assigns all `components` to it.
@@ -371,6 +372,24 @@ export class World {
             this.components[name] = [];
         }
         return this.components[name] as any
+    }
+
+    /**
+     * get resource
+     */
+    getResource<T extends Component>(klass: Constructor<T>): T {
+        let name = klass.name;
+        if (this.resources[name] === undefined) {
+            let storage = this.getStorage(klass);
+            if (storage.length === 0) {
+                throw new Error("can't find the resource")
+            }
+            for (let c of storage) {
+                this.resources[name] = c;
+                break;
+            }
+        }
+        return this.resources[name] as any
     }
 }
 

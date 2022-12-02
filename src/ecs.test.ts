@@ -134,6 +134,17 @@ describe("behavior", function () {
         expect(world.get(entity, A)).not.toBeUndefined();
     });
 
+    it("gets resource component", function () {
+        const world = new World;
+        class Res { a: number = 0 }
+
+        world.create(new Res);
+        let res = world.getResource(Res)
+        res.a = 1
+        expect(res).toBe(world.getResource(Res))
+        expect(world.getResource(Res).a).toBe(1)
+    });
+
     it("returns a non-empty view", function () {
         const world = new World;
 
