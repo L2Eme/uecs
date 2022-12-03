@@ -183,7 +183,7 @@ describe("behavior", function () {
 
         let count = 0;
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        for (const _ of world.all()) {
+        for (const _ of world.allSlotIndexes()) {
             count++;
         }
 
@@ -205,37 +205,37 @@ describe("behavior", function () {
 
         let id = world.insert(100);
         expect(id).toEqual(0)
-        expect(world.create()).toEqual(1);
+        expect(world.create()).toEqual(1 << 8);
 
         let id0 = world.insert(99);
-        expect(id0).toEqual(2)
-        expect(world.create()).toEqual(3);
+        expect(id0).toEqual(2 << 8)
+        expect(world.create()).toEqual(3 << 8);
 
-        expect(world.exists(0)).toBe(true);
-        expect(world.exists(1)).toBe(true);
-        expect(world.exists(2)).toBe(true);
+        expect(world.exists(0 << 8)).toBe(true);
+        expect(world.exists(1 << 8)).toBe(true);
+        expect(world.exists(2 << 8)).toBe(true);
 
-        world.destroy(0);
-        world.destroy(1);
-        world.destroy(2)
+        world.destroy(0 << 8);
+        world.destroy(1 << 8);
+        world.destroy(2 << 8)
 
-        expect(world.exists(0)).toBe(false);
-        expect(world.exists(1)).toBe(false);
-        expect(world.exists(2)).toBe(false);
+        expect(world.exists(0 << 8)).toBe(false);
+        expect(world.exists(1 << 8)).toBe(false);
+        expect(world.exists(2 << 8)).toBe(false);
 
-        expect(world.insert(1)).toBe(1);
-        expect(world.create()).toBe(0);
-        expect(world.create()).toBe(2);
+        expect(world.insert(1)).toBe(4 << 8);
+        expect(world.create()).toBe(5 << 8);
+        expect(world.create()).toBe(6 << 8);
 
     });
 
     it("insert does not break sequence", function () {
         const world = new World;
 
-        const a = world.insert(0);
+        const _ = world.insert(0);
         const b = world.create(); // should be 1
 
-        expect(a + 1).toEqual(b);
+        expect(b).toEqual(1 << 8);
     });
 
     it("view loop infinitely", function () {

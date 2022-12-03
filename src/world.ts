@@ -33,6 +33,7 @@ interface TypeStorage<T> { [type: string]: ComponentStorage<T> }
 class IdSlot {
 
     slots: (number | undefined)[] = []
+    generations: (number | undefined)[] = []
     deletedIds: number[] = []
 
     isDirty: boolean = true;
@@ -42,29 +43,44 @@ class IdSlot {
         return this.slots.length - this.deletedIds.length
     }
 
-    has(id: number): boolean {
-        return this.slots[id] !== undefined
+    clear() {
+        this.slots = []
+        this.generations = []
+        this.deletedIds = []
+        this.isDirty = true
+    }
+
+    has(index: number, gen: number): boolean {
+        return this.slots[index] !== undefined
+            && this.generations[index] == gen
     }
 
     add(preferedId: Entity = 0): Entity {
         this.isDirty = true;
         let id: Entity;
-        if (this.deletedIds.length === 0) {
+        if (this.slots.length < 1024
+            || this.deletedIds.length > this.slots.length
+            // || this.deletedIds.length === 0
+        ) {
+            // 如果没有删除，则一定新创建
+            // 如果删除的数量没有过半，则一定新创建
             id = this.slots.length;
-            this.slots.push(id)
+            this.slots.push(id);
+            this.generations[id] = 0;
         } else {
-            if (this.has(preferedId)) {
+            if (this.slots[preferedId] !== undefined) {
                 id = this.deletedIds.pop()!;
             } else {
-                id = preferedId
+                id = preferedId;
             }
             this.slots[id] = id;
+            this.generations[id]! += 1;
         }
         return id;
     }
 
     delete(id: number): boolean {
-        if (this.has(id)) {
+        if (this.slots[id] !== undefined) {
             this.isDirty = true;
             this.slots[id] = undefined;
             this.deletedIds.push(id)
@@ -74,7 +90,7 @@ class IdSlot {
         }
     }
 
-    getCachedList(): number[] {
+    getCachedSlotIndex(): number[] {
         if (this.isDirty) {
             this.isDirty = false;
             this.cachedIds = this.slots.filter(s => s !== undefined) as any
@@ -101,14 +117,16 @@ export class World {
      * Creates an entity, and optionally assigns all `components` to it.
      */
     create<T extends Component[]>(...components: T): Entity {
-        const entity = this.entities.add();
+        const slotIndex = this.entities.add();
+        const generation = this.entities.generations[slotIndex]!
 
+        let entity = slotIndex << 8 + generation
         // emplace all components into entity
         for (let i = 0, len = components.length; i < len; ++i) {
             this.emplace(entity, components[i]);
         }
 
-        return entity;
+        return entity
     }
 
     /**
@@ -136,8 +154,8 @@ export class World {
      * ```
      */
     insert<T extends Component[]>(entity: Entity, ...components: T): Entity {
-        if (!this.entities.has(entity)) {
-            entity = this.entities.add(entity)
+        if (!this.exists(entity)) {
+            entity = this.create()
         }
         for (let i = 0, len = components.length; i < len; ++i) {
             this.emplace(entity, components[i]);
@@ -149,7 +167,9 @@ export class World {
      * Returns true if `entity` exists in this World
      */
     exists(entity: Entity): boolean {
-        return this.entities.has(entity);
+        let slotIndex = entity >> 8;
+        let generation = entity & 255;
+        return this.entities.has(slotIndex, generation);
     }
 
     /**
@@ -166,12 +186,15 @@ export class World {
      * ```
      */
     destroy(entity: Entity) {
-        this.entities.delete(entity);
-        for (const key in this.components) {
-            const storage = this.components[key];
-            const component = storage[entity];
-            if (component !== undefined && component.free !== undefined) component.free();
-            delete storage[entity];
+        if (this.exists(entity)) {
+            let slotIndex = entity >> 8;
+            this.entities.delete(slotIndex);
+            for (const key in this.components) {
+                const storage = this.components[key];
+                const component = storage[slotIndex];
+                if (component !== undefined && component.free !== undefined) component.free();
+                delete storage[slotIndex];
+            }
         }
     }
 
@@ -195,10 +218,15 @@ export class World {
      * ```
      */
     get<T extends Component>(entity: Entity, component: Constructor<T>): T | undefined {
-        const type = component.name;
-        const storage = this.components[type];
-        if (storage === undefined) return undefined;
-        return storage[entity] as T | undefined;
+        if (this.exists(entity)) {
+            let slotIndex = entity >> 8;
+            const type = component.name;
+            const storage = this.components[type];
+            if (storage === undefined) return undefined;
+            return storage[slotIndex] as T | undefined;
+        } else {
+            return undefined;
+        }
     }
 
     /**
@@ -216,9 +244,14 @@ export class World {
      * ```
      */
     has<T extends Component>(entity: Entity, component: Constructor<T>): boolean {
-        const type = component.name;
-        const storage = this.components[type];
-        return storage !== undefined && storage[entity] !== undefined;
+        if (this.exists(entity)) {
+            let slotIndex = entity >> 8;
+            const type = component.name;
+            const storage = this.components[type];
+            return storage !== undefined && storage[slotIndex] !== undefined;
+        } else {
+            return false
+        }
     }
 
     /**
@@ -260,15 +293,16 @@ export class World {
     emplace<T extends Component>(entity: Entity, component: T) {
         const type = component.name ?? component.constructor.name;
 
-        if (!this.entities.has(entity)) {
+        if (this.exists(entity)) {
+            let slotIndex = entity >> 8;
+            let storage = this.components[type];
+            if (storage == null) {
+                storage = this.components[type] = [];
+            }
+            storage[slotIndex] = component;
+        } else {
             throw new Error(`Cannot set component "${type}" for dead entity ID ${entity}`);
         }
-
-        let storage = this.components[type];
-        if (storage == null) {
-            storage = this.components[type] = [];
-        }
-        storage[entity] = component;
     }
 
     /**
@@ -299,12 +333,17 @@ export class World {
      * ```
      */
     remove<T extends Component>(entity: Entity, component: Constructor<T>): T | undefined {
-        const type = component.name;
-        const storage = this.components[type];
-        if (storage === undefined) return undefined;
-        const out = storage[entity] as T | undefined;
-        delete storage[entity];
-        return out;
+        if (this.exists(entity)) {
+            let slotIndex = entity >> 8;
+            const type = component.name;
+            const storage = this.components[type];
+            if (storage === undefined) return undefined;
+            const out = storage[slotIndex] as T | undefined;
+            delete storage[slotIndex];
+            return out;
+        } else {
+            return undefined
+        }
     }
 
     /**
@@ -350,16 +389,16 @@ export class World {
      * Removes every entity, and destroys all components.
      */
     clear() {
-        for (const entity of this.entities.getCachedList()) {
-            this.destroy(entity);
-        }
+        this.entities.clear()
+        this.components = {}
+        this.resources = {}
     }
 
     /**
      * Returns an iterator over all the entities in the world.
      */
-    all(): Entity[] {
-        return this.entities.getCachedList()
+    allSlotIndexes(): number[] {
+        return this.entities.getCachedSlotIndex()
     }
 
     /**
@@ -436,12 +475,12 @@ class ViewImpl<T extends Constructor<Component>[]> {
     private view: ComponentView<T>;
     constructor(world: World, storages: ComponentStorage<Component>[]) {
         this.view = function (callback) {
-            let entities = (world as any).entities.getCachedList();
-            for (let e of entities) {
+            let entities = (world as any).entities.getCachedSlotIndex();
+            for (let slot of entities) {
                 let matchType = true;
-                let params = [e];
+                let params = [slot];
                 for (let s of storages) {
-                    let c = s[e];
+                    let c = s[slot];
                     if (c === undefined) {
                         matchType = false;
                         break;
