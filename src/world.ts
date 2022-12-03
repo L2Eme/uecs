@@ -129,6 +129,15 @@ export class World {
         return entity
     }
 
+    getEntity(slotIndex: number | string): Entity | undefined {
+        let gen = this.entities.generations[slotIndex as any];
+        if (gen !== undefined) {
+            return (slotIndex as any) << 8 + gen
+        } else {
+            return undefined
+        }
+    }
+
     /**
      * Inserts the `entity`, and optionally assigns all `components` to it.
      * 
