@@ -238,6 +238,23 @@ describe("behavior", function () {
         expect(b).toEqual(1 << 8);
     });
 
+    it("insert new generation", function () {
+        const world = new World;
+
+        for (let i = 0; i < 1024; i ++) {
+            world.create();
+        }
+
+        for (let i = 0; i < 512; i ++) {
+            world.destroy(i << 8)
+        }
+
+        let id0_gen1 = world.create()
+        let id1_gen1 = world.create()
+        expect(id0_gen1).toBe((511 << 8) + 1)
+        expect(id1_gen1).toBe((510 << 8) + 1)
+    });
+
     it("view loop infinitely", function () {
         const world = new World;
         world.create(A);

@@ -55,35 +55,34 @@ class IdSlot {
             && this.generations[index] == gen
     }
 
-    add(preferedId: Entity = 0): Entity {
+    add(): Entity {
         this.isDirty = true;
-        let id: Entity;
         if (this.slots.length < 1024
-            || this.deletedIds.length > this.slots.length
+            || (this.deletedIds.length * 4) < this.slots.length
             // || this.deletedIds.length === 0
         ) {
-            // 如果没有删除，则一定新创建
-            // 如果删除的数量没有过半，则一定新创建
-            id = this.slots.length;
-            this.slots.push(id);
-            this.generations[id] = 0;
+            // 如果slots总数少于1024，则一定新创建
+            // 如果删除的数量小于slot的1/4，则一定新创建
+            let index = this.slots.length;
+            this.slots.push(index);
+            this.generations[index] = 0;
+            return index << 8
         } else {
-            if (this.slots[preferedId] !== undefined) {
-                id = this.deletedIds.pop()!;
-            } else {
-                id = preferedId;
-            }
-            this.slots[id] = id;
-            this.generations[id]! += 1;
+            // 如果删除的数量大于1/4，则重用，并且增加一代
+            let index: number;
+            index = this.deletedIds.pop()!;
+            this.slots[index] = index;
+            let gen = this.generations[index]! + 1;
+            this.generations[index] = gen;
+            return (index << 8) + gen
         }
-        return id;
     }
 
-    delete(id: number): boolean {
-        if (this.slots[id] !== undefined) {
+    delete(slotIndex: number): boolean {
+        if (this.slots[slotIndex] !== undefined) {
             this.isDirty = true;
-            this.slots[id] = undefined;
-            this.deletedIds.push(id)
+            this.slots[slotIndex] = undefined;
+            this.deletedIds.push(slotIndex)
             return true
         } else {
             return false
@@ -117,10 +116,8 @@ export class World {
      * Creates an entity, and optionally assigns all `components` to it.
      */
     create<T extends Component[]>(...components: T): Entity {
-        const slotIndex = this.entities.add();
-        const generation = this.entities.generations[slotIndex]!
+        const entity = this.entities.add();
 
-        let entity = slotIndex << 8 + generation
         // emplace all components into entity
         for (let i = 0, len = components.length; i < len; ++i) {
             this.emplace(entity, components[i]);
@@ -132,7 +129,7 @@ export class World {
     getEntity(slotIndex: number | string): Entity | undefined {
         let gen = this.entities.generations[slotIndex as any];
         if (gen !== undefined) {
-            return (slotIndex as any) << 8 + gen
+            return ((slotIndex as any) << 8) + gen
         } else {
             return undefined
         }
