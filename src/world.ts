@@ -22,15 +22,22 @@ export interface Component {
 
 /**
  * Fast Array <--> Slow Array
+ * * 使用slot index，而不是entity作为索引
  */
 export type ComponentStorage<T> = T[]
 // Type aliases for component storage
 interface TypeStorage<T> { [type: string]: ComponentStorage<T> }
 
+class ComponentSlots<T> {
+    slots: (T | undefined)[] = []
+
+   
+}
+
 // store entities in Array<Entity> instead of Set<Entity>
 // if an entity is destroyed, set it in the array to undefined
 // skip entities marked as undefined in views
-class IdSlot {
+class IdSlots {
 
     slots: (number | undefined)[] = []
     generations: (number | undefined)[] = []
@@ -52,7 +59,7 @@ class IdSlot {
 
     has(index: number, gen: number): boolean {
         return this.slots[index] !== undefined
-            && this.generations[index] == gen
+            && (this.generations[index]! & 255) == gen
     }
 
     add(): Entity {
@@ -70,7 +77,7 @@ class IdSlot {
         } else {
             // 如果删除的数量大于1/4，则重用，并且增加一代
             let index: number;
-            index = this.deletedIds.pop()!;
+            index = this.deletedIds.shift()!;
             this.slots[index] = index;
             let gen = this.generations[index]! + 1;
             this.generations[index] = gen;
@@ -107,7 +114,7 @@ class IdSlot {
  * TODO: add archetype
  */
 export class World {
-    private entities: IdSlot = new IdSlot;
+    private entities: IdSlots = new IdSlots;
     private components: TypeStorage<Component> = {};
     private views: { [id: string]: View<any> } = {};
     private resources: { [id: string]: Component } = {};

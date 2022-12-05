@@ -251,8 +251,21 @@ describe("behavior", function () {
 
         let id0_gen1 = world.create()
         let id1_gen1 = world.create()
-        expect(id0_gen1).toBe((511 << 8) + 1)
-        expect(id1_gen1).toBe((510 << 8) + 1)
+        expect(id0_gen1).toBe((0 << 8) + 1)
+        expect(id1_gen1).toBe((1 << 8) + 1)
+    });
+
+    it("world create many entities", function () {
+        const world = new World;
+
+        for (let i = 0; i < 2048; i ++) {
+            let e = world.create();
+            world.emplace(e, new A)
+            world.destroy(e)
+        }
+
+        let e = world.create()
+        world.emplace(e, new A)
     });
 
     it("view loop infinitely", function () {
