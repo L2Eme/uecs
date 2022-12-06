@@ -121,6 +121,7 @@ export class World {
     private components: TypeStorage<Component> = {};
     private views: { [id: string]: View<any> } = {};
     private resources: { [id: string]: Component } = {};
+    private resourceEntity: Entity | undefined;
 
     /**
      * Creates an entity, and optionally assigns all `components` to it.
@@ -429,7 +430,27 @@ export class World {
     }
 
     /**
+     * 创建一个唯一的entity，来记录所有resource
+     * @returns 
+     */
+    getOrCreateResource(): Entity {
+        if (this.resourceEntity === undefined) {
+            this.resourceEntity = this.create()
+        }
+        return this.resourceEntity
+    }
+
+    /**
+     * insert components to resource
+     */
+    insertResource<T extends Component[]>(...components: T): Entity {
+        let entity = this.getOrCreateResource()
+        return this.insert(entity, ...components)
+    }
+
+    /**
      * get resource
+     * TODO: refactor with resource entity
      */
     getResource<T extends Component>(klass: Constructor<T>): T {
         let name = klass.name;
