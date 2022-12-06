@@ -28,11 +28,13 @@ export type ComponentStorage<T> = T[]
 // Type aliases for component storage
 interface TypeStorage<T> { [type: string]: ComponentStorage<T> }
 
-class ComponentSlots<T> {
-    slots: (T | undefined)[] = []
-
-   
-}
+// class ComponentSlots<T> {
+//     slots: (number | undefined)[] = []
+//     storage: (T | undefined)[] = []
+//     getSlotIndexes(): number[] {
+//         return this.slots.filter(v => v !== undefined) as any
+//     }
+// }
 
 // store entities in Array<Entity> instead of Set<Entity>
 // if an entity is destroyed, set it in the array to undefined
@@ -85,8 +87,9 @@ class IdSlots {
         }
     }
 
-    delete(slotIndex: number): boolean {
-        if (this.slots[slotIndex] !== undefined) {
+    delete(slotIndex: number, gen: number): boolean {
+        if (this.slots[slotIndex] !== undefined
+            && (this.generations[slotIndex]! & 255) == gen) {
             this.isDirty = true;
             this.slots[slotIndex] = undefined;
             this.deletedIds.push(slotIndex)
@@ -199,13 +202,12 @@ export class World {
      * ```
      */
     destroy(entity: Entity) {
-        if (this.exists(entity)) {
-            let slotIndex = entity >> 8;
-            this.entities.delete(slotIndex);
-            for (const key in this.components) {
+        let slotIndex = entity >> 8;
+        if (this.entities.delete(slotIndex, entity & 255)) {
+            for (let key in this.components) {
                 const storage = this.components[key];
-                const component = storage[slotIndex];
-                if (component !== undefined && component.free !== undefined) component.free();
+                // const component = storage[slotIndex];
+                // if (component !== undefined && component.free !== undefined) component.free();
                 delete storage[slotIndex];
             }
         }
